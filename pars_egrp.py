@@ -2,40 +2,50 @@ import json
 import requests
 
 
-# search_macro_region('Татарстан', 'Казань', 'Петербургская', 1)
-def search_macro_region(name_of_region, name_of_state, street, house):
-    macro_region_id, state_id = None, None
-    url_extra = 'https://extra.egrp365.ru/api/extra/index.php'
-    form_data = {
-        'method': 'getRegionsList'
-        }
+# extra_search('Татарстан', 'Казань', 'Петербургская', '1')
+def extra_search(name_of_region, name_of_state, street, house):
+    url = 'https://extra.egrp365.ru/api/extra/index.php'
 
-    post = requests.post(url_extra, data=form_data)
-    _json = json.loads(post.text)
-    data = _json['data']
-    for region in data:
-        if name_of_region in region['name']:
-            macro_region_id = region['value']
-            form_data['region'] = macro_region_id
-
-    post_two = requests.post(url_extra, data=form_data)
-    _json_two = json.loads(post_two.text)
-    data_two = _json_two['data']
-    for state in data_two:
-        if name_of_state in state['name']:
-            state_id = state['value']
-
-    url_db = 'https://extra.egrp365.ru/api/mongo/index.php'
     form_data_db = {
-        'macroRegionId': macro_region_id,
-        'regionId': state_id,
         'street': street,
         'house': house,
         'method': 'searchByAddress'
         }
-    post_db = requests.post(url_db, data=form_data_db)
-    _json_db = post_db.text
+
+    form_data = {
+        'method': 'getRegionsList'
+        }
+
+    post = requests.post(url, data=form_data)
+    _json = json.loads(post.text)
+    data = _json['data']
+    for region in data:
+        if name_of_region in region['name']:
+            form_data['region'] = region['value']
+            form_data_db['macroRegionId'] = region['value']
+
+    post_two = requests.post(url, data=form_data)
+    _json_two = json.loads(post_two.text)
+    data_two = _json_two['data']
+    for state in data_two:
+        if name_of_state in state['name']:
+            form_data_db['regionId'] = state['value']
+
+    post_db = requests.post(url, data=form_data_db)
+    _json_db = json.loads(post_db.text)
+    funded = _json_db['data']
 
     # for a test
-    with open('content.txt', 'w') as file:
-        print(_json_db, file=file)
+    url_geo = 'https://egrp365.ru/map_alpha/ajax/geocode_yandex2.php'
+    with open('funded.txt', 'w') as file:
+        for teg in funded:
+            req = requests.post(url_geo, data={'obj_name': teg['address']})
+            geo = json.loads(req.text)
+            etc = requests.post('https://extra.egrp365.ru/api/mongo/index.php', data={'number': teg['cn']}).text
+            etc_json = json.loads(etc)['data'][0]
+
+            print(f"Кадастровый номер: {teg['cn']}\n"
+                  f"Адрес: {teg['address']}\n"
+                  f"Ссылка на кадастровую карту объекта: https://egrp365.ru/map/?kadnum={teg['cn']}\n"
+                  f"Этаж: {etc_json['floor']}, Плошадь: {etc_json['area']}\n"
+                  f"Географические координаты объекта: {geo}\n", file=file)
