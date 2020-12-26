@@ -3,8 +3,8 @@ import mysql.connector
 
 db_config = {
     'host': 'localhost',
-    'user': 'user_pc',
-    'password': '1235',
+    'user': 'root',
+    'password': 'qpwo',
     'database': 'egrp365'
     }
 
@@ -67,7 +67,8 @@ def create_tables(config):
                 region VARCHAR(150) DEFAULT '',
                 city VARCHAR(30) DEFAULT '',
                 street VARCHAR(50) DEFAULT '',
-                house VARCHAR(3) DEFAULT ''
+                house VARCHAR(3) DEFAULT '',
+                try INT NOT NULL DEFAULT 1
                 );
             """
         cursor.execute(sql)
@@ -75,9 +76,9 @@ def create_tables(config):
         sql = """
             CREATE TABLE IF NOT EXISTS results_search (
                 object_id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
-                kad_number NOT NULL VARCHAR(20),
+                kad_number VARCHAR(20) NOT NULL,
                 address VARCHAR(255),
-                href NOT NULL VARCHAR(55),
+                link VARCHAR(55) NOT NULL,
                 floor VARCHAR(3),
                 area DEC(8,2),
                 geo VARCHAR(26),
@@ -86,41 +87,35 @@ def create_tables(config):
                 street VARCHAR(50),
                 house VARCHAR(3),
                 apartment VARCHAR(4),	
-                json_main NVARCHAR(MAX),
-                json_total NVARCHAR(MAX)
-                );
-            """
-        cursor.execute(sql)
-
-        sql = """
-            CREATE TABLE IF NOT EXISTS found (
-                id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
-                string_search VARCHAR(255),
+                json_main LONGTEXT,
+                json_extra LONGTEXT
                 );
             """
         cursor.execute(sql)
 
         sql = """
             CREATE TABLE IF NOT EXISTS not_found (
-                id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
-                string_search VARCHAR(255),
-                string_search VARCHAR(255) DEFAULT '',
-                region VARCHAR(150) DEFAULT '',
-                city VARCHAR(30) DEFAULT '',
-                street VARCHAR(50) DEFAULT '',
-                house VARCHAR(3) DEFAULT ''
+                id INT NOT NULL
                 );
             """
         cursor.execute(sql)
 
         sql = """
-            CREATE TABLE IF NOT EXISTS try (
-                try_num INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
-                
-                id INT NOT NULL,
-                CONSTRAINT not_found_id_fk
-                FOREIGN KEY (id)
-                REFERENCES not_found (id) ON DELETE CASCADE	
-                );
+            CREATE TRIGGER OnInsertNotFound
+                AFTER INSERT ON not_found
+                FOR EACH ROW
+                BEGIN
+                    SET @id = NEW.id;
+                    UPDATE to_search SET try = try + 1 WHERE id = @id;
+                    IF (SELECT try FROM to_search WHERE id = @id) = 3 THEN
+                        DELETE FROM to_search WHERE id = @id;
+                    END IF;
+                END;
             """
         cursor.execute(sql)
+
+
+if __name__ == '__main__':
+    create_database(db_config)
+    create_tables(db_config)
+    print('All done')
