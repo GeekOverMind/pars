@@ -3,6 +3,7 @@
 import json
 import requests
 import threading
+
 from manage_module import db_config as config
 from manage_module import OpenDatabase
 
@@ -72,13 +73,15 @@ def object_search(string_search):
     try:
         json_data = json.loads(res_data.text)
         found = json_data.get('data')
+        # if json_data.get('success') == 'false':
+        # return False
 
         url = 'https://suggestions.dadata.ru/suggestions/api/4_1/rs/suggest/address'
         head = {
             'Authorization': 'Token e8e5282e003f9876d9a66e625d4b7cec5bbf9274',
             'Connection': 'keep-alive',
-            'User-Agent': 'Mozilla/5.0'
-        }
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:81.0) Gecko/20100101 Firefox/81.0'
+            }
         res_json_total = requests.post(url, json={'query': one_string_query}, headers=head, verify=False)
         if res_json_total.status_code == 200:
             json_total = res_json_total.text
@@ -86,8 +89,8 @@ def object_search(string_search):
             json_total = ''
 
         url_geo = 'https://egrp365.ru/map_alpha/ajax/geocode_yandex2.php'
-        out_data = []
         if found:
+            out_data = []
             for tag in found:
                 res_geodata = requests.post(url_geo, data={'obj_name': tag['address']})
                 if res_geodata.status_code == 200:
@@ -196,8 +199,8 @@ def find_from_sql():
             for row in result:
                 print(f'Количество объектов {row[1]} в регионе {row[0]}')
 
-        rows = get_source()
-        while rows[0]:
+        while get_source():
+            rows = get_source()
             if rows[0][1]:
                 data = object_search(rows[0][1])  # string
                 string_to_check = rows[0][1]

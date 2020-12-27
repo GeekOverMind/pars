@@ -29,7 +29,7 @@ def create_tables(config):
                 city VARCHAR(30) DEFAULT '',
                 street VARCHAR(50) DEFAULT '',
                 house VARCHAR(3) DEFAULT '',
-                try INT NOT NULL DEFAULT 1
+                try INT NOT NULL DEFAULT 0
                 );
             """
         cursor.execute(sql)
