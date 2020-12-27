@@ -1,10 +1,13 @@
 import json
 import requests
+from sql_db import OpenDatabase
+from sql_db import db_config as config
 
 
 # extra_search('Татарстан', 'Казань', 'Петербургская', '1')
 # extra_search('Татарстан Казань Петербургская 1')
 def extra_search(*string_search):
+
     if len(string_search) == 4:
         name_of_region, name_of_state, street, house = map(str, string_search)
         one_string_query = ' '.join(string_search)  # for total json
@@ -18,61 +21,108 @@ def extra_search(*string_search):
         'street': street,
         'house': house,
         'method': 'searchByAddress'
-        }
+    }
 
     form_data = {
         'method': 'getRegionsList'
-        }
+    }
 
     res_region = requests.post(url, data=form_data)
-    json_region = json.loads(res_region.text)
-    data = json_region['data']
-    for region in data:
-        if name_of_region in region['name']:
-            form_data['region'] = region['value']
-            form_data_db['macroRegionId'] = region['value']
-            break
+    if res_region.status_code != 200:
+        return f'Response {res_region.status_code}'
 
-    res_state = requests.post(url, data=form_data)
-    json_state = json.loads(res_state.text)
-    data_two = json_state['data']
-    for state in data_two:
-        if name_of_state in state['name']:
-            form_data_db['regionId'] = state['value']
-            break
+    try:
+        json_region = json.loads(res_region.text)
+        data = json_region.get('data')
+        if data:
+            for region in data:
+                if name_of_region in region['name']:
+                    form_data['region'] = region['value']
+                    form_data_db['macroRegionId'] = region['value']
+                    break
+    except json.decoder.JSONDecodeError:
+        return 'JSON Error'
+
+    if form_data.get('region'):
+        res_state = requests.post(url, data=form_data)
+
+        if res_state.status_code != 200:
+            return f'Response {res_state.status_code}'
+
+        try:
+            json_state = json.loads(res_state.text)
+            data_two = json_state.get('data')
+            if data_two:
+                for state in data_two:
+                    if name_of_state in state['name']:
+                        form_data_db['regionId'] = state['value']
+                        break
+        except json.decoder.JSONDecodeError:
+            return 'JSON Error'
 
     res_data = requests.post(url, data=form_data_db)
-    json_data = json.loads(res_data.text)
-    found = json_data['data']
 
-    # for a test
-    url_geo = 'https://egrp365.ru/map_alpha/ajax/geocode_yandex2.php'
-    with open('found.txt', 'w') as file:
-        for tag in found:
-            res_geodata = requests.post(url_geo, data={'obj_name': tag['address']})
-            geo_data = json.loads(res_geodata.text)
-            res_other = requests.post('https://extra.egrp365.ru/api/mongo/index.php', data={'number': tag['cn']}).text
-            json_other = json.loads(res_other)['data'][0]
+    if res_data.status_code != 200:
+        return f'Response {res_data.status_code}'
 
-            print(
-                f"Кадастровый номер: {tag['cn']}\n"
-                f"Адрес: {tag['address']}\n"
-                f"Ссылка на кадастровую карту объекта: https://egrp365.ru/map/?kadnum={tag['cn']}\n"
-                f"Этаж: {json_other['floor']}, Плошадь: {json_other['area']}\n"
-                f"Географические координаты объекта: {geo_data}\n",
-                file=file
+    try:
+        json_data = json.loads(res_data.text)
+        found = json_data.get('data')
+
+        url = 'https://suggestions.dadata.ru/suggestions/api/4_1/rs/suggest/address'
+        head = {
+            'Authorization': 'Token e8e5282e003f9876d9a66e625d4b7cec5bbf9274',
+            'Connection': 'keep-alive',
+            'User-Agent': 'Mozilla/5.0'
+        }
+        res_json_total = requests.post(url, json={'query': one_string_query}, headers=head, verify=False)
+        if res_json_total.status_code == 200:
+            json_total = res_json_total.text
+        else:
+            json_total = ''
+
+        url_geo = 'https://egrp365.ru/map_alpha/ajax/geocode_yandex2.php'
+        if found:
+            for tag in found:
+                res_geodata = requests.post(url_geo, data={'obj_name': tag['address']})
+                if res_geodata.status_code == 200:
+                    geo_data = ', '.join(json.loads(res_geodata.text))
+                else:
+                    geo_data = ''
+
+                res_other = requests.post(
+                    'https://extra.egrp365.ru/api/mongo/index.php',
+                    data={'number': tag['cn']}
+                    )
+                if res_other.status_code == 200:
+                    other_data = json.loads(res_other.text).get('data')
+                    if other_data:
+                        floor = other_data[0].get('floor')
+                        area = other_data[0].get('area')
+                    else:
+                        floor, area = '', ''
+                else:
+                    floor, area = '', ''
+                # json_other = json.loads(res_other.text)['data'][0]
+
+                data_to_sql = (
+                    tag['cn'],
+                    tag['address'],
+                    f"https://egrp365.ru/map/?kadnum={tag['cn']}",
+                    floor,
+                    area,
+                    geo_data,
+                    tag['region'],  # not verified, server was overloaded
+                    tag['place'],  # not verified, server was overloaded
+                    tag['street'],  # not verified, server was overloaded
+                    tag['house'],  # not verified, server was overloaded
+                    tag['apartment'],  # not verified, server was overloaded
+                    ' '.join(json_total),
+                    json_data
                 )
+                yield data_to_sql
+        else:
+            return False
 
-    url = 'https://suggestions.dadata.ru/suggestions/api/4_1/rs/suggest/address'
-    head = {
-        'Authorization': 'Token e8e5282e003f9876d9a66e625d4b7cec5bbf9274',
-        'Connection': 'keep-alive',
-        'User-Agent': 'Mozilla/5.0'
-    }
-    json_total = requests.post(url, json={'query': one_string_query}, headers=head, verify=False).text
-    with open('json_total.txt', 'w') as file:
-        print(json_total, file=file)
-
-
-if __name__ == '__main__':
-    extra_search('Татарстан Казань Петербургская 1')
+    except json.decoder.JSONDecodeError:
+        return 'JSON Error'
