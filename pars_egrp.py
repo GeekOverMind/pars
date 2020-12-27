@@ -1,7 +1,12 @@
 import json
 import requests
+import threading
 from sql_db import OpenDatabase
 from sql_db import db_config as config
+
+
+def start_pars():
+    find_from_sql()
 
 
 def object_search(string_search):
@@ -148,7 +153,16 @@ def find_from_sql():
                 SELECT COUNT(*) FROM results_search;
                 """
             cursor.execute(_sql)
-            return f'Количество найденных объектов: {cursor.fetchone()[0]}'
+            # return f'Количество найденных объектов: {cursor.fetchone()[0]}'
+            return cursor.fetchone()[0]
+
+        def not_found_object():
+            _sql = """
+                SELECT COUNT(DISTINCT id) FROM not_found;
+                """
+            cursor.execute(_sql)
+            # return f'Количество ненайденных объектов: {cursor.fetchone()[0]}'
+            return cursor.fetchone()[0]
 
         def equal_address(string):
             _sql = """
@@ -169,13 +183,6 @@ def find_from_sql():
                 """
             cursor.execute(_sql, (string,))
             return cursor.fetchone()[0]
-
-        def not_found_object():
-            _sql = """
-                SELECT COUNT(DISTINCT id) FROM not_found;
-                """
-            cursor.execute(_sql)
-            return f'Количество ненайденных объектов: {cursor.fetchone()[0]}'
 
         def object_in_region():
             _sql = """
@@ -220,10 +227,25 @@ def find_from_sql():
                         """
                     cursor.execute(sql, line)
 
-                    found_objects()
-                    not_found_object()
-                    equal_address(string_to_check)
+                    # found_objects()
+                    # not_found_object()
+                    # equal_address(string_to_check)
                     object_in_region()
+
+                    sql = """
+                        INSERT INTO resume (
+                            found,
+                            not_found,
+                            equal
+                            )
+                        VALUES (%s, %s, %s);
+                    """
+                    cursor.execute(sql, (
+                        found_objects(),
+                        not_found_object(),
+                        equal_address(string_to_check)
+                        )
+                    )
 
                     sql = """
                         DELETE FROM to_search WHERE id = %s;
@@ -233,6 +255,11 @@ def find_from_sql():
                 print(data)
             elif not data:
                 cursor.execute("""INSERT INTO not_found (id) VALUES (%s);""", (rows[0][0],))
+            else:
+                print('Oops...')
+
+        t = threading.Timer(600.00, start_pars)
+        t.start()
 
 
 find_from_sql()
