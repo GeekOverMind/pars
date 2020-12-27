@@ -34,11 +34,6 @@ class OpenDatabase:
 
 
 def create_database(config):
-    """
-    Creates a database
-    :param config: dictionary with connection arguments for connector
-    :return: nothing
-    """
     new_config = config.copy()
     del new_config['database']
     with OpenDatabase(new_config) as cursor:
@@ -54,11 +49,6 @@ def create_database(config):
 
 
 def create_tables(config):
-    """
-    Creates tables
-    :param config: dictionary with connection arguments for connector
-    :return: nothing
-    """
     with OpenDatabase(config) as cursor:
         sql = """
             CREATE TABLE IF NOT EXISTS to_search (
@@ -76,17 +66,17 @@ def create_tables(config):
         sql = """
             CREATE TABLE IF NOT EXISTS results_search (
                 object_id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
-                kad_number VARCHAR(20) NOT NULL,
-                address VARCHAR(255),
+                kad_number VARCHAR(25) NOT NULL,
+                address VARCHAR(255) DEFAULT '',
                 link VARCHAR(55) NOT NULL,
                 floor VARCHAR(3),
                 area DEC(8,2),
                 geo VARCHAR(26),
-                region VARCHAR(150),
-                city VARCHAR(30),
-                street VARCHAR(50),
-                house VARCHAR(3),
-                apartment VARCHAR(4),	
+                region VARCHAR(150) DEFAULT '',
+                city VARCHAR(30) DEFAULT '',
+                street VARCHAR(50) DEFAULT '',
+                house VARCHAR(3) DEFAULT '',
+                apartment VARCHAR(4) DEFAULT '',	
                 json_main LONGTEXT,
                 json_extra LONGTEXT
                 );
@@ -95,7 +85,18 @@ def create_tables(config):
 
         sql = """
             CREATE TABLE IF NOT EXISTS not_found (
+                num_id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
                 id INT NOT NULL
+                );
+            """
+        cursor.execute(sql)
+
+        sql = """
+            CREATE TABLE IF NOT EXISTS resume (
+                search_num INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+                found INT NOT NULL,
+                not_found INT NOT NULL,
+                equal INT NOT NULL
                 );
             """
         cursor.execute(sql)
