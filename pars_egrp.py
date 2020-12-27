@@ -6,7 +6,7 @@ from sql_db import db_config as config
 
 # extra_search('Татарстан', 'Казань', 'Петербургская', '1')
 # extra_search('Татарстан Казань Петербургская 1')
-def extra_search(*string_search):
+def object_search(*string_search):
 
     if len(string_search) == 4:
         name_of_region, name_of_state, street, house = map(str, string_search)
@@ -21,11 +21,11 @@ def extra_search(*string_search):
         'street': street,
         'house': house,
         'method': 'searchByAddress'
-    }
+        }
 
     form_data = {
         'method': 'getRegionsList'
-    }
+        }
 
     res_region = requests.post(url, data=form_data)
     if res_region.status_code != 200:
@@ -117,8 +117,8 @@ def extra_search(*string_search):
                     tag['street'],  # not verified, server was overloaded
                     tag['house'],  # not verified, server was overloaded
                     tag['apartment'],  # not verified, server was overloaded
-                    ' '.join(json_total),
-                    json_data
+                    json_total,
+                    res_data.text
                 )
                 yield data_to_sql
         else:
@@ -126,3 +126,62 @@ def extra_search(*string_search):
 
     except json.decoder.JSONDecodeError:
         return 'JSON Error'
+
+
+def find_from_sql():
+    with OpenDatabase(config) as cursor:
+        def get_source():
+            _sql = """
+                SELECT
+                    id,
+                    string_search,
+                    region,
+                    city,
+                    street,
+                    house
+                FROM
+                    to_search;
+                """
+            cursor.execute(_sql)
+            return cursor.fetchall()
+
+        rows = get_source()
+        while rows[0]:
+            if rows[0][1]:
+                # print('var1', rows[0][1])
+                data = object_search(rows[0][1])
+            else:
+                # print('var2', rows[0][2:])
+                data = object_search(rows[0][2:])
+
+            if data:
+                sql = """
+                    INSERT INTO results_search (
+                        kad_number,
+                        address,
+                        link,
+                        floor,
+                        area,
+                        geo,
+                        region,
+                        city,
+                        street,
+                        house,
+                        apartment,	
+                        json_main,
+                        json_extra
+                        )
+                    VALUES
+                        (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s);
+                    """
+
+                cursor.execute(sql, data)
+
+                sql = """
+                    DELETE FROM to_search WHERE id = %s;
+                    """
+                cursor.execute(sql, rows[0][0])
+            elif isinstance(data, str):
+                print(data)
+            elif not data:
+                cursor.execute("""INSERT INTO not_found (id) VALUES (%s);""", (rows[0][0],))
