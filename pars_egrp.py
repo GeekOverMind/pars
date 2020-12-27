@@ -1,8 +1,10 @@
+#!/usr/bin/python3.9
+
 import json
 import requests
 import threading
-from sql_db import OpenDatabase
-from sql_db import db_config as config
+from manage_module import db_config as config
+from manage_module import OpenDatabase
 
 
 def start_pars():
@@ -153,7 +155,6 @@ def find_from_sql():
                 SELECT COUNT(*) FROM results_search;
                 """
             cursor.execute(_sql)
-            # return f'Количество найденных объектов: {cursor.fetchone()[0]}'
             return cursor.fetchone()[0]
 
         def not_found_object():
@@ -161,7 +162,6 @@ def find_from_sql():
                 SELECT COUNT(DISTINCT id) FROM not_found;
                 """
             cursor.execute(_sql)
-            # return f'Количество ненайденных объектов: {cursor.fetchone()[0]}'
             return cursor.fetchone()[0]
 
         def equal_address(string):
@@ -192,6 +192,7 @@ def find_from_sql():
                 """
             cursor.execute(_sql)
             result = cursor.fetchall()
+
             for row in result:
                 print(f'Количество объектов {row[1]} в регионе {row[0]}')
 
@@ -227,9 +228,6 @@ def find_from_sql():
                         """
                     cursor.execute(sql, line)
 
-                    # found_objects()
-                    # not_found_object()
-                    # equal_address(string_to_check)
                     object_in_region()
 
                     sql = """
@@ -262,4 +260,5 @@ def find_from_sql():
         t.start()
 
 
-find_from_sql()
+if __name__ == '__main__':
+    find_from_sql()
