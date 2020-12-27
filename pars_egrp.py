@@ -4,16 +4,13 @@ from sql_db import OpenDatabase
 from sql_db import db_config as config
 
 
-# extra_search('Татарстан', 'Казань', 'Петербургская', '1')
-# extra_search('Татарстан Казань Петербургская 1')
-def object_search(*string_search):
-
+def object_search(string_search):
     if len(string_search) == 4:
-        name_of_region, name_of_state, street, house = map(str, string_search)
+        name_of_region, name_of_state, street, house = string_search
         one_string_query = ' '.join(string_search)  # for total json
     else:
-        name_of_region, name_of_state, street, house = ' '.join(string_search).split(' ')
-        one_string_query = ''.join(string_search)  # for total json
+        name_of_region, name_of_state, street, house = string_search.split(' ')
+        one_string_query = string_search  # for total json
 
     url = 'https://extra.egrp365.ru/api/extra/index.php'
 
@@ -82,6 +79,7 @@ def object_search(*string_search):
             json_total = ''
 
         url_geo = 'https://egrp365.ru/map_alpha/ajax/geocode_yandex2.php'
+        out_data = []
         if found:
             for tag in found:
                 res_geodata = requests.post(url_geo, data={'obj_name': tag['address']})
@@ -103,7 +101,6 @@ def object_search(*string_search):
                         floor, area = '', ''
                 else:
                     floor, area = '', ''
-                # json_other = json.loads(res_other.text)['data'][0]
 
                 data_to_sql = (
                     tag['cn'],
@@ -120,7 +117,8 @@ def object_search(*string_search):
                     json_total,
                     res_data.text
                 )
-                yield data_to_sql
+                out_data.append(data_to_sql)
+                return out_data
         else:
             return False
 
@@ -145,43 +143,96 @@ def find_from_sql():
             cursor.execute(_sql)
             return cursor.fetchall()
 
+        def found_objects():
+            _sql = """
+                SELECT COUNT(*) FROM results_search;
+                """
+            cursor.execute(_sql)
+            return f'Количество найденных объектов: {cursor.fetchone()[0]}'
+
+        def equal_address(string):
+            _sql = """
+                SELECT COUNT(*) FROM results_search r
+                WHERE EXISTS
+                    (SELECT * FROM to_search t
+                    WHERE
+                        r.region = t.region
+                    AND
+                        r.city = t.city
+                    AND
+                        r.street = t.street
+                    AND
+                        r.house = t.house
+                    OR
+                        CONCAT_WS(' ', r.region, r.city, r.street, r.house) = %s
+                    );
+                """
+            cursor.execute(_sql, (string,))
+            return cursor.fetchone()[0]
+
+        def not_found_object():
+            _sql = """
+                SELECT COUNT(DISTINCT id) FROM not_found;
+                """
+            cursor.execute(_sql)
+            return f'Количество ненайденных объектов: {cursor.fetchone()[0]}'
+
+        def object_in_region():
+            _sql = """
+                SELECT region, COUNT(object_id) total FROM results_search
+                GROUP BY region
+                ORDER BY total DESC;
+                """
+            cursor.execute(_sql)
+            result = cursor.fetchall()
+            for row in result:
+                print(f'Количество объектов {row[1]} в регионе {row[0]}')
+
         rows = get_source()
         while rows[0]:
             if rows[0][1]:
-                # print('var1', rows[0][1])
-                data = object_search(rows[0][1])
+                data = object_search(rows[0][1])  # string
+                string_to_check = rows[0][1]
             else:
-                # print('var2', rows[0][2:])
-                data = object_search(rows[0][2:])
+                data = object_search(rows[0][2:])  # tuple
+                string_to_check = ' '.join(rows[0][2:])
 
             if data:
-                sql = """
-                    INSERT INTO results_search (
-                        kad_number,
-                        address,
-                        link,
-                        floor,
-                        area,
-                        geo,
-                        region,
-                        city,
-                        street,
-                        house,
-                        apartment,	
-                        json_main,
-                        json_extra
-                        )
-                    VALUES
-                        (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s);
-                    """
+                for line in data:
+                    sql = """
+                        INSERT INTO results_search (
+                            kad_number,
+                            address,
+                            link,
+                            floor,
+                            area,
+                            geo,
+                            region,
+                            city,
+                            street,
+                            house,
+                            apartment,	
+                            json_main,
+                            json_extra
+                            )
+                        VALUES
+                            (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s);
+                        """
+                    cursor.execute(sql, line)
 
-                cursor.execute(sql, data)
+                    found_objects()
+                    not_found_object()
+                    equal_address(string_to_check)
+                    object_in_region()
 
-                sql = """
-                    DELETE FROM to_search WHERE id = %s;
-                    """
-                cursor.execute(sql, rows[0][0])
+                    sql = """
+                        DELETE FROM to_search WHERE id = %s;
+                        """
+                    cursor.execute(sql, rows[0][0])
             elif isinstance(data, str):
                 print(data)
             elif not data:
                 cursor.execute("""INSERT INTO not_found (id) VALUES (%s);""", (rows[0][0],))
+
+
+find_from_sql()
