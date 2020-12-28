@@ -217,7 +217,6 @@ def find_from_sql():
             if data:
                 if isinstance(data, str):
                     print(data)
-                    return
 
                 elif isinstance(data, list):
                     for line in data:
@@ -265,7 +264,6 @@ def find_from_sql():
                         cursor.execute(sql, (rows[0][0],))
                 else:
                     print('Oops...')
-                    return
 
             elif not data:
                 cursor.execute("""INSERT INTO not_found (id) VALUES (%s);""", (rows[0][0],))
