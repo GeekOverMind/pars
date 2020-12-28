@@ -72,9 +72,8 @@ def object_search(string_search):
 
     try:
         json_data = json.loads(res_data.text)
-        found = json_data.get('data')
-        # if json_data.get('success') == 'false':
-        # return False
+        if not json_data.get('success'):
+            return False
 
         url = 'https://suggestions.dadata.ru/suggestions/api/4_1/rs/suggest/address'
         head = {
@@ -89,6 +88,8 @@ def object_search(string_search):
             json_total = ''
 
         url_geo = 'https://egrp365.ru/map_alpha/ajax/geocode_yandex2.php'
+
+        found = json_data.get('data')
         if found:
             out_data = []
             for tag in found:
@@ -119,16 +120,16 @@ def object_search(string_search):
                     floor,
                     area,
                     geo_data,
-                    tag['region'],  # not verified, server was overloaded
-                    tag['place'],  # not verified, server was overloaded
-                    tag['street'],  # not verified, server was overloaded
-                    tag['house'],  # not verified, server was overloaded
+                    name_of_region,
+                    name_of_state,
+                    street,
+                    house,
                     tag['apartment'],  # not verified, server was overloaded
                     json_total,
                     res_data.text
                 )
                 out_data.append(data_to_sql)
-                return out_data
+            return out_data
         else:
             return False
 
@@ -138,6 +139,10 @@ def object_search(string_search):
 
 def find_from_sql():
     with OpenDatabase(config) as cursor:
+        def delete_not_found():
+            _sql = """DELETE FROM not_found"""
+            cursor.execute(_sql)
+
         def get_source():
             _sql = """
                 SELECT
@@ -199,6 +204,7 @@ def find_from_sql():
             for row in result:
                 print(f'Количество объектов {row[1]} в регионе {row[0]}')
 
+        delete_not_found()
         while get_source():
             rows = get_source()
             if rows[0][1]:
@@ -209,55 +215,60 @@ def find_from_sql():
                 string_to_check = ' '.join(rows[0][2:])
 
             if data:
-                for line in data:
-                    sql = """
-                        INSERT INTO results_search (
-                            kad_number,
-                            address,
-                            link,
-                            floor,
-                            area,
-                            geo,
-                            region,
-                            city,
-                            street,
-                            house,
-                            apartment,	
-                            json_main,
-                            json_extra
-                            )
-                        VALUES
-                            (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s);
+                if isinstance(data, str):
+                    print(data)
+                    return
+
+                elif isinstance(data, list):
+                    for line in data:
+                        sql = """
+                            INSERT INTO results_search (
+                                kad_number,
+                                address,
+                                link,
+                                floor,
+                                area,
+                                geo,
+                                region,
+                                city,
+                                street,
+                                house,
+                                apartment,	
+                                json_main,
+                                json_extra
+                                )
+                            VALUES
+                                (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s);
+                            """
+                        cursor.execute(sql, line)
+
+                        object_in_region()
+
+                        sql = """
+                            INSERT INTO resume (
+                                found,
+                                not_found,
+                                equal
+                                )
+                            VALUES (%s, %s, %s);
                         """
-                    cursor.execute(sql, line)
-
-                    object_in_region()
-
-                    sql = """
-                        INSERT INTO resume (
-                            found,
-                            not_found,
-                            equal
+                        cursor.execute(sql, (
+                            found_objects(),
+                            not_found_object(),
+                            equal_address(string_to_check)
                             )
-                        VALUES (%s, %s, %s);
-                    """
-                    cursor.execute(sql, (
-                        found_objects(),
-                        not_found_object(),
-                        equal_address(string_to_check)
                         )
-                    )
 
-                    sql = """
-                        DELETE FROM to_search WHERE id = %s;
-                        """
-                    cursor.execute(sql, rows[0][0])
-            elif isinstance(data, str):
-                print(data)
+                        sql = """
+                            DELETE FROM to_search WHERE id = %s;
+                            """
+                        cursor.execute(sql, (rows[0][0],))
+                else:
+                    print('Oops...')
+                    return
+
             elif not data:
                 cursor.execute("""INSERT INTO not_found (id) VALUES (%s);""", (rows[0][0],))
-            else:
-                print('Oops...')
 
         t = threading.Timer(600.00, start_pars)
         t.start()

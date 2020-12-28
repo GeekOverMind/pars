@@ -46,8 +46,8 @@ def create_tables(config):
                 region VARCHAR(150) DEFAULT '',
                 city VARCHAR(30) DEFAULT '',
                 street VARCHAR(50) DEFAULT '',
-                house VARCHAR(3) DEFAULT '',
-                apartment VARCHAR(4) DEFAULT '',	
+                house VARCHAR(5) DEFAULT '',
+                apartment VARCHAR(5) DEFAULT '',	
                 json_main LONGTEXT,
                 json_extra LONGTEXT
                 );
