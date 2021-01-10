@@ -194,15 +194,16 @@ def find_from_sql():
 
         def object_in_region():
             _sql = """
-                SELECT region, COUNT(object_id) total FROM results_search
-                GROUP BY region
-                ORDER BY total DESC;
+                SELECT count(*), region, low_area(area), high_area(area) FROM results_search
+                GROUP BY region, low_area(area), high_area(area);
                 """
+
             cursor.execute(_sql)
             result = cursor.fetchall()
 
             for row in result:
-                print(f'Количество объектов {row[1]} в регионе {row[0]}')
+                print(f'Количество найденных объектов в регионе {row[1]}'
+                      f'с площадью от {row[2]} до {row[3]} составляет {row[0]}')
 
         delete_not_found()
         while get_source():
