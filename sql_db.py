@@ -86,6 +86,26 @@ def create_tables(config):
             """
         cursor.execute(sql)
 
+        sql = """
+            CREATE FUNCTION low_area(area DEC) RETURNS INT
+            DETERMINISTIC
+            BEGIN
+                SET @num = area;
+                RETURN TRUNCATE(@num, -1);
+            END;
+            """
+        cursor.execute(sql)
+
+        sql = """
+            CREATE FUNCTION high_area(area DEC) RETURNS INT
+            DETERMINISTIC
+            BEGIN
+                SET @num = area;
+                RETURN CEILING(@num/10)*10;
+            END;
+            """
+        cursor.execute(sql)
+
 
 if __name__ == '__main__':
     create_database(db_config)
